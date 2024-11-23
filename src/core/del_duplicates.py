@@ -516,7 +516,6 @@ class DeleteDuplicates(MultiGridTransfer, SampleClustering):
         ----------
         strus [obj, 1d]: structure objects in pymatgen
         energys [float, 1d]: energy of structures
-        limit [int, 0d]: limit number
         
         Returns
         ----------
@@ -570,11 +569,11 @@ class DeleteDuplicates(MultiGridTransfer, SampleClustering):
         strus = self.get_stru_batch_parallel(atom_pos, atom_type, grid_name, grid_ratio, space_group, angles, thicks)
         for j, sg in enumerate(space_group):
             if not last_sg == sg:
-                args_list = self.divide_duplicates_jobs(args_list, i, j, strus, energys, energy_tol=1e2)
+                args_list = self.divide_duplicates_jobs(args_list, i, j, strus, energys)
                 last_sg = sg
                 i = j
         end = len(space_group)
-        args_list = self.divide_duplicates_jobs(args_list, i, end, strus, energys, energy_tol=1e2)
+        args_list = self.divide_duplicates_jobs(args_list, i, end, strus, energys)
         #delete duplicates in parallel
         cores = pythonmp.cpu_count()
         with pythonmp.get_context('fork').Pool(processes=cores) as pool:
@@ -594,9 +593,9 @@ class DeleteDuplicates(MultiGridTransfer, SampleClustering):
         idx = np.unique(idx)
         idx = np.setdiff1d(all_idx, idx)
         return sorted(idx)
-    
+
     def divide_duplicates_jobs(self, args_list, start, end,
-                               strus, energys, energy_tol=.1, limit=20):
+                               strus, energys, energy_tol=.1, limit=10):
         """
         divide parallel delete duplicates jobs into smaller size for each core
 

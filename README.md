@@ -277,7 +277,7 @@ After searching, you will get three important files.
 
 ## Authors
 
-This software was developed by SCCOP-LX group. 
+This software was developed by SCCOP group. 
 
 ## License
 

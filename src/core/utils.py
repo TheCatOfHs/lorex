@@ -317,6 +317,34 @@ class SSHTools:
         self.work_nodes_num = len(self.work_nodes)
         self.child_nodes_num = len(self.child_nodes)
     
+    def get_node_len(self):
+        """
+        get the length of node name
+
+        Returns
+        ----------
+        node_len [int, 0d]: length of node name
+        """
+        node_len = len(Host_Node.split('-'))
+        return node_len
+        
+    def extract_node_name(self, file_name):
+        """
+        extract node name from given file
+
+        Parameters
+        ----------
+        file_name [str, 0d]: file name
+
+        Returns
+        ----------
+        node [str, 0d]: node name of file
+        """
+        node_len = self.get_node_len()
+        ct = file_name.split('-')[-node_len:]
+        node = '-'.join(ct)
+        return node
+    
     def ssh_node(self, shell_script, node):
         """
         SSH to target node and execute command
@@ -423,7 +451,8 @@ class SSHTools:
         assign, jobs = [], []
         for node in self.work_nodes:
             for poscar in poscars:
-                label = poscar.split('-')[-1]
+                ct = poscar.split('-')
+                label = '-'.join(ct[2:])
                 if label == str(node):
                     assign.append(poscar)
             if len(assign) > 0:

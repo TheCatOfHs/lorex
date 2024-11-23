@@ -78,7 +78,7 @@ class ParallelSubLammps(ListRWTools, SSHTools, LammpsDPT):
         job [str, 1d]: name of poscars in same node
         iteration [int, 0d]: sccop iteration
         """
-        node = job[0].split('-')[-1]
+        node = self.extract_node_name(job[0])
         poscar_str = ' '.join(job)
         local_LAMMPS_Out_Path = f'{SCCOP_Path}/{LAMMPS_Out_Path}/ml_{iteration:02.0f}'
         #zip poscar and scf script
@@ -131,7 +131,7 @@ class ParallelSubLammps(ListRWTools, SSHTools, LammpsDPT):
         wait_time [float, 0d]: wait time of finishing job
         finish_ratio [float, 0d]: ratio of finished jobs
         """
-        node = job[0].split('-')[-1]
+        node = self.extract_node_name(job[0])
         poscar_str = ' '.join(job)
         finish_num = max(1, int(finish_ratio*len(job)))
         job_num = f'`ls calc-* | grep RUNNING | wc -l`'
@@ -411,7 +411,7 @@ class LammpsOpt(SSHTools, DeleteDuplicates, LammpsDPT):
         finish_ratio [float, 0d]: ratio of finished jobs
         """
         lammps_flag = 1 if Use_LAMMPS_Opt else 0
-        node = job[0].split('-')[-1]
+        node = self.extract_node_name(job[0])
         poscar_str = ' '.join(job)
         finish_num = max(1, int(finish_ratio*len(job)))
         job_num = f'`ls calc-* | grep RUNNING | wc -l`'
@@ -616,7 +616,7 @@ class LammpsOpt(SSHTools, DeleteDuplicates, LammpsDPT):
         ----------
         job [str, 1d]: name of poscars in same node
         """
-        node = job[0].split('-')[-1]
+        node = self.extract_node_name(job[0])
         poscar_str = ' '.join(job)
         shell_script = f'''
                         #!/bin/bash --login

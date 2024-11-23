@@ -172,38 +172,34 @@ class CrystalOptimization(ListRWTools, UpdateNodes):
             file = f'{VASP_Out_Path}/Energy-{iteration:02.0f}.dat'
         elif Energy_Method == 'LAMMPS':
             file = f'{LAMMPS_Out_Path}/Energy-{iteration:02.0f}.dat'
-        if os.path.exists(file):
-            energy_file = self.import_list2d(file, str, numpy=True)
-            mask = np.array(energy_file)[:, 1]
-            mask = [True if i=='True' else False for i in mask]
-            energys = np.array(energy_file[:, 2], dtype=float)
-            #use std to filter high energy structures
-            std = np.std(energys[mask])
-            mean = np.mean(energys[mask])
-            for i, energy in enumerate(energys):
-                if energy - mean > 3*std:
-                    mask[i] = False
-            energys = energys[mask].tolist()
-            #import sampling data
-            head = f'{Search_Path}/ml_{iteration:02.0f}'
-            atom_pos = self.import_list2d(f'{head}/atom_pos_select.dat', int)
-            atom_type = self.import_list2d(f'{head}/atom_type_select.dat', int)
-            atom_symm = self.import_list2d(f'{head}/atom_symm_select.dat', int)
-            grid_name = self.import_list2d(f'{head}/grid_name_select.dat', int)
-            grid_ratio = self.import_list2d(f'{head}/grid_ratio_select.dat', float)
-            space_group = self.import_list2d(f'{head}/space_group_select.dat', int)
-            angles = self.import_list2d(f'{head}/angles_select.dat', int)
-            thicks = self.import_list2d(f'{head}/thicks_select.dat', int)
-            grid_name = np.concatenate(grid_name)
-            grid_ratio = np.concatenate(grid_ratio)
-            space_group = np.concatenate(space_group)
-            #filter samples
-            atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group, angles, thicks = \
-                self.init.filter_samples(mask, atom_pos, atom_type, atom_symm,
-                                        grid_name, grid_ratio, space_group, angles, thicks)
-        else:
-            atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group, angles, thicks, energys = \
-                [], [], [], [], [], [], [], [], []
+        energy_file = self.import_list2d(file, str, numpy=True)
+        mask = np.array(energy_file)[:, 1]
+        mask = [True if i=='True' else False for i in mask]
+        energys = np.array(energy_file[:, 2], dtype=float)
+        #use std to filter high energy structures
+        std = np.std(energys[mask])
+        mean = np.mean(energys[mask])
+        for i, energy in enumerate(energys):
+            if energy - mean > 3*std:
+                mask[i] = False
+        energys = energys[mask].tolist()
+        #import sampling data
+        head = f'{Search_Path}/ml_{iteration:02.0f}'
+        atom_pos = self.import_list2d(f'{head}/atom_pos_select.dat', int)
+        atom_type = self.import_list2d(f'{head}/atom_type_select.dat', int)
+        atom_symm = self.import_list2d(f'{head}/atom_symm_select.dat', int)
+        grid_name = self.import_list2d(f'{head}/grid_name_select.dat', int)
+        grid_ratio = self.import_list2d(f'{head}/grid_ratio_select.dat', float)
+        space_group = self.import_list2d(f'{head}/space_group_select.dat', int)
+        angles = self.import_list2d(f'{head}/angles_select.dat', int)
+        thicks = self.import_list2d(f'{head}/thicks_select.dat', int)
+        grid_name = np.concatenate(grid_name)
+        grid_ratio = np.concatenate(grid_ratio)
+        space_group = np.concatenate(space_group)
+        #filter samples
+        atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group, angles, thicks = \
+            self.init.filter_samples(mask, atom_pos, atom_type, atom_symm,
+                                     grid_name, grid_ratio, space_group, angles, thicks)
         return atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group, angles, thicks, energys
     
     def import_recyc_data(self, recyc):
@@ -416,132 +412,127 @@ class CrystalOptimization(ListRWTools, UpdateNodes):
         batchsize [int, 0d]: training batchsize
         train_valid_ratio [float, 0d]: ratio of trainset and validation
         """
-        if len(grid_name) > 0:
-            #sorted by grid and space group for new data
-            idx = self.transfer.sort_by_grid_sg(grid_name, space_group)
-            atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group, angles, thicks = \
-                self.init.filter_samples(idx, atom_pos, atom_type, atom_symm,
-                                        grid_name, grid_ratio, space_group, angles, thicks)
-            energy = np.array(energy)[idx].tolist()
-            #new data
-            atom_fea, nbr_fea, nbr_fea_idx = \
-                self.transfer.get_gnn_input_batch_general(atom_pos, atom_type, grid_name, grid_ratio, space_group)
-            #train set
-            if len(train_pos) == 0:
-                train_atom_fea, train_symm_tmp, train_nbr_fea, train_nbr_fea_idx, train_energy_tmp = [], [], [], [], []
-                valid_atom_fea, valid_symm, valid_nbr_fea, valid_nbr_fea_idx, valid_energy = [], [], [], [], []
-            else:
-                train_atom_fea, train_nbr_fea, train_nbr_fea_idx = \
-                    self.transfer.get_gnn_input_batch_general(train_pos, train_type, train_grid, train_ratio, train_sg)
-            #get gnn input from optimzied samples
-            optim_file = [i for i in os.listdir(POSCAR_Path) if i.startswith('optim')]
-            if len(optim_file) > 0:
-                select = Select(0)
-                strus, opt_energys = select.collect_recycle(0, len(optim_file))
-                opt_atom_fea_bh, opt_nbr_fea_bh, opt_nbr_fea_idx_bh = self.transfer.get_gnn_input_from_stru_batch_parallel(strus)
-                opt_symm = [[1 for _ in range(len(i))] for i in opt_atom_fea_bh]
-            else:
-                opt_energys, opt_symm = [], []
-                opt_atom_fea_bh, opt_nbr_fea_bh, opt_nbr_fea_idx_bh = [], [], []
-            #divide train set
-            if len(train_pos) > 0:
-                num = len(train_energy)
-                idx = np.arange(num)
-                np.random.shuffle(idx)
-                add_num = int(train_valid_ratio*num)
-                train_idx = idx[:add_num]
-                valid_idx = idx[add_num:]
-                #validation set
-                valid_atom_fea = np.array(train_atom_fea, dtype=object)[valid_idx].tolist()
-                valid_symm = np.array(train_symm, dtype=object)[valid_idx].tolist()
-                valid_nbr_fea = np.array(train_nbr_fea, dtype=object)[valid_idx].tolist()
-                valid_nbr_fea_idx = np.array(train_nbr_fea_idx, dtype=object)[valid_idx].tolist()
-                valid_energy = np.array(train_energy, dtype=object)[valid_idx].tolist()
-                #train set
-                train_atom_fea = np.array(train_atom_fea, dtype=object)[train_idx].tolist()
-                train_symm_tmp = np.array(train_symm, dtype=object)[train_idx].tolist()
-                train_nbr_fea = np.array(train_nbr_fea, dtype=object)[train_idx].tolist()
-                train_nbr_fea_idx = np.array(train_nbr_fea_idx, dtype=object)[train_idx].tolist()
-                train_energy_tmp = np.array(train_energy, dtype=object)[train_idx].tolist()
-            #divide searched samples
-            num = len(energy)
+        #sorted by grid and space group for new data
+        idx = self.transfer.sort_by_grid_sg(grid_name, space_group)
+        atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group, angles, thicks = \
+            self.init.filter_samples(idx, atom_pos, atom_type, atom_symm,
+                                     grid_name, grid_ratio, space_group, angles, thicks)
+        energy = np.array(energy)[idx].tolist()
+        #new data
+        atom_fea, nbr_fea, nbr_fea_idx = \
+            self.transfer.get_gnn_input_batch_general(atom_pos, atom_type, grid_name, grid_ratio, space_group)
+        #train set
+        if len(train_pos) == 0:
+            train_atom_fea, train_symm_tmp, train_nbr_fea, train_nbr_fea_idx, train_energy_tmp = [], [], [], [], []
+            valid_atom_fea, valid_symm, valid_nbr_fea, valid_nbr_fea_idx, valid_energy = [], [], [], [], []
+        else:
+            train_atom_fea, train_nbr_fea, train_nbr_fea_idx = \
+                self.transfer.get_gnn_input_batch_general(train_pos, train_type, train_grid, train_ratio, train_sg)
+        #get gnn input from optimzied samples
+        optim_file = [i for i in os.listdir(POSCAR_Path) if i.startswith('optim')]
+        if len(optim_file) > 0:
+            select = Select(0)
+            strus, opt_energys = select.collect_recycle(0, len(optim_file))
+            opt_atom_fea_bh, opt_nbr_fea_bh, opt_nbr_fea_idx_bh = self.transfer.get_gnn_input_from_stru_batch_parallel(strus)
+            opt_symm = [[1 for _ in range(len(i))] for i in opt_atom_fea_bh]
+        else:
+            opt_energys, opt_symm = [], []
+            opt_atom_fea_bh, opt_nbr_fea_bh, opt_nbr_fea_idx_bh = [], [], []
+        #divide train set
+        if len(train_pos) > 0:
+            num = len(train_energy)
             idx = np.arange(num)
             np.random.shuffle(idx)
             add_num = int(train_valid_ratio*num)
             train_idx = idx[:add_num]
             valid_idx = idx[add_num:]
             #validation set
-            valid_atom_fea += np.array(atom_fea, dtype=object)[valid_idx].tolist()
-            valid_symm += np.array(atom_symm, dtype=object)[valid_idx].tolist()
-            valid_nbr_fea += np.array(nbr_fea, dtype=object)[valid_idx].tolist()
-            valid_nbr_fea_idx += np.array(nbr_fea_idx, dtype=object)[valid_idx].tolist()
-            valid_energy += np.array(energy, dtype=object)[valid_idx].tolist()
-            tuple = valid_atom_fea, valid_symm, valid_nbr_fea, valid_nbr_fea_idx, valid_energy
-            num = len(valid_energy)
-            if Job_Queue == 'GPU':
-                batch_balance(num, batchsize, tuple)
-            valid_num = len(valid_energy)
+            valid_atom_fea = np.array(train_atom_fea, dtype=object)[valid_idx].tolist()
+            valid_symm = np.array(train_symm, dtype=object)[valid_idx].tolist()
+            valid_nbr_fea = np.array(train_nbr_fea, dtype=object)[valid_idx].tolist()
+            valid_nbr_fea_idx = np.array(train_nbr_fea_idx, dtype=object)[valid_idx].tolist()
+            valid_energy = np.array(train_energy, dtype=object)[valid_idx].tolist()
             #train set
-            train_atom_fea += np.array(atom_fea, dtype=object)[train_idx].tolist()
-            train_symm_tmp += np.array(atom_symm, dtype=object)[train_idx].tolist()
-            train_nbr_fea += np.array(nbr_fea, dtype=object)[train_idx].tolist()
-            train_nbr_fea_idx += np.array(nbr_fea_idx, dtype=object)[train_idx].tolist()
-            train_energy_tmp += np.array(energy, dtype=object)[train_idx].tolist()
-            #merge train set
-            all_train_atom_fea = opt_atom_fea_bh + train_atom_fea
-            all_train_symm = opt_symm + train_symm_tmp
-            all_train_nbr_fea = opt_nbr_fea_bh + train_nbr_fea
-            all_train_nbr_fea_idx = opt_nbr_fea_idx_bh + train_nbr_fea_idx
-            all_train_energy = opt_energys + train_energy_tmp
-            tuple = all_train_atom_fea, all_train_symm, all_train_nbr_fea, all_train_nbr_fea_idx, all_train_energy
-            num = len(all_train_energy)
-            if Job_Queue == 'GPU':
-                batch_balance(num, batchsize, tuple)
-            train_num = len(all_train_energy)
-            system_echo(f'Training set: {train_num}  Validation set: {valid_num}')
-            #train model
-            train_data = GNNData(all_train_atom_fea, all_train_symm, all_train_nbr_fea,
-                                all_train_nbr_fea_idx, all_train_energy)
-            valid_data = GNNData(valid_atom_fea, valid_symm, valid_nbr_fea,
-                                valid_nbr_fea_idx, valid_energy)
-            gnn = GNNTrain(iteration+1, train_data, valid_data, valid_data, train_batchsize=batchsize)
-            gnn.train_epochs()
-            #update train set
-            self.update_dataset(atom_pos, atom_type, atom_symm,
-                                grid_name, grid_ratio, space_group, angles, thicks, energy,
-                                train_pos, train_type, train_symm, train_grid,
-                                train_ratio, train_sg, train_angles, train_thicks, train_energy)
-            #use std to filter high energy structures
-            idx = []
-            std = np.std(train_energy)
-            mean = np.mean(train_energy)
-            for i, e in enumerate(train_energy):
-                if e - mean < 3*std:
-                    idx.append(i)
-            train_pos, train_type, train_symm, train_grid, train_ratio, train_sg, train_angles, train_thicks = \
-                self.init.filter_samples(idx, train_pos, train_type, train_symm,
-                                        train_grid, train_ratio, train_sg, train_angles, train_thicks)
-            train_energy = np.array(train_energy)[idx].tolist()
-            #sorted by grid and space group for train set
-            idx = self.transfer.sort_by_grid_sg(train_grid, train_sg)
-            train_pos, train_type, train_symm, train_grid, train_ratio, train_sg, train_angles, train_thicks = \
-                self.init.filter_samples(idx, train_pos, train_type, train_symm,
-                                        train_grid, train_ratio, train_sg, train_angles, train_thicks)
-            train_energy = np.array(train_energy)[idx].tolist()
-            #clean memory
-            del atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group
-            del atom_fea, nbr_fea, nbr_fea_idx, train_atom_fea, train_nbr_fea, train_nbr_fea_idx
-            del opt_atom_fea_bh, opt_nbr_fea_bh, opt_nbr_fea_idx_bh
-            del all_train_atom_fea, all_train_symm, all_train_nbr_fea, all_train_nbr_fea_idx, all_train_energy
-            del valid_atom_fea, valid_symm, valid_nbr_fea, valid_nbr_fea_idx, valid_energy
-            del train_data, valid_data, gnn
-            #release CUDA
-            if Job_Queue == 'GPU':
-                torch.cuda.empty_cache()
-        else:
-            old_model_save_path = f'{Model_Path}/{iteration:02.0f}'
-            new_model_save_path = f'{Model_Path}/{iteration+1:02.0f}'
-            shutil.copytree(old_model_save_path, new_model_save_path)
+            train_atom_fea = np.array(train_atom_fea, dtype=object)[train_idx].tolist()
+            train_symm_tmp = np.array(train_symm, dtype=object)[train_idx].tolist()
+            train_nbr_fea = np.array(train_nbr_fea, dtype=object)[train_idx].tolist()
+            train_nbr_fea_idx = np.array(train_nbr_fea_idx, dtype=object)[train_idx].tolist()
+            train_energy_tmp = np.array(train_energy, dtype=object)[train_idx].tolist()
+        #divide searched samples
+        num = len(energy)
+        idx = np.arange(num)
+        np.random.shuffle(idx)
+        add_num = int(train_valid_ratio*num)
+        train_idx = idx[:add_num]
+        valid_idx = idx[add_num:]
+        #validation set
+        valid_atom_fea += np.array(atom_fea, dtype=object)[valid_idx].tolist()
+        valid_symm += np.array(atom_symm, dtype=object)[valid_idx].tolist()
+        valid_nbr_fea += np.array(nbr_fea, dtype=object)[valid_idx].tolist()
+        valid_nbr_fea_idx += np.array(nbr_fea_idx, dtype=object)[valid_idx].tolist()
+        valid_energy += np.array(energy, dtype=object)[valid_idx].tolist()
+        tuple = valid_atom_fea, valid_symm, valid_nbr_fea, valid_nbr_fea_idx, valid_energy
+        num = len(valid_energy)
+        if Job_Queue == 'GPU':
+            batch_balance(num, batchsize, tuple)
+        valid_num = len(valid_energy)
+        #train set
+        train_atom_fea += np.array(atom_fea, dtype=object)[train_idx].tolist()
+        train_symm_tmp += np.array(atom_symm, dtype=object)[train_idx].tolist()
+        train_nbr_fea += np.array(nbr_fea, dtype=object)[train_idx].tolist()
+        train_nbr_fea_idx += np.array(nbr_fea_idx, dtype=object)[train_idx].tolist()
+        train_energy_tmp += np.array(energy, dtype=object)[train_idx].tolist()
+        #merge train set
+        all_train_atom_fea = opt_atom_fea_bh + train_atom_fea
+        all_train_symm = opt_symm + train_symm_tmp
+        all_train_nbr_fea = opt_nbr_fea_bh + train_nbr_fea
+        all_train_nbr_fea_idx = opt_nbr_fea_idx_bh + train_nbr_fea_idx
+        all_train_energy = opt_energys + train_energy_tmp
+        tuple = all_train_atom_fea, all_train_symm, all_train_nbr_fea, all_train_nbr_fea_idx, all_train_energy
+        num = len(all_train_energy)
+        if Job_Queue == 'GPU':
+            batch_balance(num, batchsize, tuple)
+        train_num = len(all_train_energy)
+        system_echo(f'Training set: {train_num}  Validation set: {valid_num}')
+        #train model
+        train_data = GNNData(all_train_atom_fea, all_train_symm, all_train_nbr_fea,
+                             all_train_nbr_fea_idx, all_train_energy)
+        valid_data = GNNData(valid_atom_fea, valid_symm, valid_nbr_fea,
+                             valid_nbr_fea_idx, valid_energy)
+        gnn = GNNTrain(iteration+1, train_data, valid_data, valid_data, train_batchsize=batchsize)
+        gnn.train_epochs()
+        #update train set
+        self.update_dataset(atom_pos, atom_type, atom_symm,
+                            grid_name, grid_ratio, space_group, angles, thicks, energy,
+                            train_pos, train_type, train_symm, train_grid,
+                            train_ratio, train_sg, train_angles, train_thicks, train_energy)
+        #use std to filter high energy structures
+        idx = []
+        std = np.std(train_energy)
+        mean = np.mean(train_energy)
+        for i, e in enumerate(train_energy):
+            if e - mean < 3*std:
+                idx.append(i)
+        train_pos, train_type, train_symm, train_grid, train_ratio, train_sg, train_angles, train_thicks = \
+            self.init.filter_samples(idx, train_pos, train_type, train_symm,
+                                     train_grid, train_ratio, train_sg, train_angles, train_thicks)
+        train_energy = np.array(train_energy)[idx].tolist()
+        #sorted by grid and space group for train set
+        idx = self.transfer.sort_by_grid_sg(train_grid, train_sg)
+        train_pos, train_type, train_symm, train_grid, train_ratio, train_sg, train_angles, train_thicks = \
+            self.init.filter_samples(idx, train_pos, train_type, train_symm,
+                                     train_grid, train_ratio, train_sg, train_angles, train_thicks)
+        train_energy = np.array(train_energy)[idx].tolist()
+        #clean memory
+        del atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group
+        del atom_fea, nbr_fea, nbr_fea_idx, train_atom_fea, train_nbr_fea, train_nbr_fea_idx
+        del opt_atom_fea_bh, opt_nbr_fea_bh, opt_nbr_fea_idx_bh
+        del all_train_atom_fea, all_train_symm, all_train_nbr_fea, all_train_nbr_fea_idx, all_train_energy
+        del valid_atom_fea, valid_symm, valid_nbr_fea, valid_nbr_fea_idx, valid_energy
+        del train_data, valid_data, gnn
+        #release CUDA
+        if Job_Queue == 'GPU':
+            torch.cuda.empty_cache()
         return train_pos, train_type, train_symm, train_grid, train_ratio, train_sg, train_angles, train_thicks, train_energy
         
     def update_dataset(self, atom_pos, atom_type, atom_symm,

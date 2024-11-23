@@ -697,8 +697,8 @@ class GNNSlice(GNNPredict):
                                 grid_name, grid_ratio, space_group, angles, thicks)
         energys = energys[idx]
         crys_vec = crys_vec[idx]
-        #sort structure in order of space group, energy
-        idx = self.sort_by_sg_energy(space_group, energys)
+        #sort structure in order of grid, space group, energy
+        idx = self.sort_by_grid_sg_energy(grid_name, space_group, energys)
         atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group, angles, thicks = \
             self.filter_samples(idx, atom_pos, atom_type, atom_symm, 
                                 grid_name, grid_ratio, space_group, angles, thicks)

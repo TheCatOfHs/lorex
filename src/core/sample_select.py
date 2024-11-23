@@ -50,38 +50,42 @@ class Select(SSHTools, GNNSlice):
             gnn_energys = gnn_energys[idx]
             train_vec = train_vec[idx]
             idx = self.delete_same_selected_crys_vec_parallel(crys_vec, energys, train_vec, gnn_energys)
-            if len(idx) > 0:
-                atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group, angles, thicks = \
-                    self.filter_samples(idx, atom_pos, atom_type, atom_symm, 
-                                        grid_name, grid_ratio, space_group, angles, thicks)
-                energys = energys[idx]
-                crys_vec = crys_vec[idx]
-        if len(idx) > 0:
-            #select samples
-            samples_num = SA_Strus_per_Node*self.work_nodes_num
-            if Use_ML_Clustering:
-                #filter by energy
-                idx = np.arange(len(energys))
-                num = int(max(samples_num, SA_Energy_Ratio*len(energys)))
-                order = np.argsort(energys)[:num]
-                energys_filter = energys[order]
-                crys_vec_filter = crys_vec[order]
-                idx = idx[order]
-                if num > samples_num:
-                    #reduce dimension and clustering
-                    crys_embedded = self.reduce(crys_vec_filter)
-                    clusters = self.cluster(samples_num, crys_embedded)
-                    idx_slt = self.min_in_cluster(idx, energys_filter, clusters)
-                else:
-                    idx_slt = idx
-            else:
-                idx_slt = np.argsort(energys)[:samples_num]
-            #export POSCAR
             atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group, angles, thicks = \
-                self.filter_samples(idx_slt, atom_pos, atom_type, atom_symm, 
+                self.filter_samples(idx, atom_pos, atom_type, atom_symm, 
                                     grid_name, grid_ratio, space_group, angles, thicks)
-            energys = energys[idx_slt]
-            self.write_POSCARs(atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group, angles, thicks, energys)
+            energys = energys[idx]
+            crys_vec = crys_vec[idx]
+        #select samples
+        samples_num = Num_Clusters_per_Node*self.work_nodes_num
+        if Use_ML_Clustering:
+            idx = np.arange(len(energys))
+            #delete duplicates by crystal vectors
+            idx_del = self.delete_duplicates_crys_vec_parallel(crys_vec, energys)
+            energys_del = energys[idx_del]
+            crys_vec_del = crys_vec[idx_del]
+            idx = idx[idx_del]
+            system_echo(f'Delete duplicates --- sample number: {len(idx)}')
+            #filter by energy
+            num = int(max(samples_num, SA_Energy_Ratio*len(energys_del)))
+            order = np.argsort(energys_del)[:num]
+            energys_filter = energys_del[order]
+            crys_vec_filter = crys_vec_del[order]
+            idx = idx[order]
+            if num > samples_num:
+                #reduce dimension and clustering
+                crys_embedded = self.reduce(crys_vec_filter)
+                clusters = self.cluster(samples_num, crys_embedded)
+                idx_slt = self.min_in_cluster(idx, energys_filter, clusters)
+            else:
+                idx_slt = idx
+        else:
+            idx_slt = np.argsort(energys)[:samples_num]
+        #export POSCAR
+        atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group, angles, thicks = \
+            self.filter_samples(idx_slt, atom_pos, atom_type, atom_symm, 
+                                grid_name, grid_ratio, space_group, angles, thicks)
+        energys = energys[idx_slt]
+        self.write_POSCARs(atom_pos, atom_type, atom_symm, grid_name, grid_ratio, space_group, angles, thicks, energys)
     
     def write_POSCARs(self, atom_pos, atom_type, atom_symm,
                       grid_name, grid_ratio, space_group, angles, thicks, energys):
@@ -324,8 +328,8 @@ class Select(SSHTools, GNNSlice):
         space_group [int, 1d]: space group number
         angles [int, 2d]: cluster rotation angles
         thicks [int, 2d]: atom displacement in z-direction
-        energys [float, 1d, np]: structure energy
-        crys_vec [float, 2d, np]: crystal vector
+        energys [float, 1d]: structure energy
+        crys_vec [float, 2d]: crystal vector
         """
         atom_pos = self.import_list2d(f'{self.search_save_path}/atom_pos.dat', int)
         atom_type = self.import_list2d(f'{self.search_save_path}/atom_type.dat', int)

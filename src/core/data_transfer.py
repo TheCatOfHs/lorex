@@ -321,6 +321,9 @@ class Transfer(Neighbors, AtomManipulate):
         elif General_Search and Dimension == 2 and Thickness > 0:
             stru = self.generate_stru_puckered(sg, latt, atom_type, coords, thick)
         else:
+            order = np.argsort(atom_type)
+            atom_type = np.array(atom_type)[order]
+            coords = np.array(coords)[order]
             stru = Structure.from_spacegroup(sg, latt, atom_type, coords)
         return stru
     

@@ -28,20 +28,14 @@ class ParallelSubVasp(ListRWTools, SSHTools):
         ----------
         iteration [int, 0d]: sccop iteration
         """
-        store_path = f'{POSCAR_Path}/ml_{iteration:02.0f}'
-        if os.path.exists(store_path):
-            poscars = os.listdir(store_path)
-            num_poscar = len(poscars)
-            system_echo(f'Start VASP Calculation --- itersions: '
-                        f'{iteration}, number: {num_poscar}')
-            #vasp calculation
-            self.sub_vasp_job(poscars, iteration)
-            #get energy of outputs
-            self.get_energy(iteration)
-        else:
-            num_poscar = 0
-            system_echo(f'No VASP Calculation --- itersions: '
-                        f'{iteration}, number: {num_poscar}')
+        poscars = os.listdir(f'{POSCAR_Path}/ml_{iteration:02.0f}')
+        num_poscar = len(poscars)
+        system_echo(f'Start VASP Calculation --- itersions: '
+                    f'{iteration}, number: {num_poscar}')
+        #vasp calculation
+        self.sub_vasp_job(poscars, iteration)
+        #get energy of outputs
+        self.get_energy(iteration)
     
     def sub_vasp_job(self, poscars, iteration):
         """
@@ -83,7 +77,7 @@ class ParallelSubVasp(ListRWTools, SSHTools):
         job [str, 1d]: name of poscars in same node
         iteration [int, 0d]: sccop iteration
         """
-        node = job[0].split('-')[-1]
+        node = self.extract_node_name(job[0])
         poscar_str = ' '.join(job)
         local_VASP_Out_Path = f'{SCCOP_Path}/{VASP_Out_Path}/ml_{iteration:02.0f}'
         #zip poscar and scf script
@@ -138,7 +132,7 @@ class ParallelSubVasp(ListRWTools, SSHTools):
         wait_time [float, 0d]: wait time of finishing job
         finish_ratio [float, 0d]: ratio of finished jobs
         """
-        node = job[0].split('-')[-1]
+        node = self.extract_node_name(job[0])
         poscar_str = ' '.join(job)
         finish_num = max(1, int(finish_ratio*len(job)))
         job_num = f'`ls calc-* | grep RUNNING | wc -l`'
@@ -247,6 +241,10 @@ class ParallelSubVasp(ListRWTools, SSHTools):
         ----------
         iteration [int, 0d]: sccop iteration
         """
+        if len(E_Range) > 0:
+            E_low, E_up = E_Range
+        else:
+            E_low, E_up = [-100, 100]
         true_E, energys = [], []
         vasp_out = os.listdir(f'{VASP_Out_Path}/ml_{iteration:02.0f}')
         vasp_out = sorted(vasp_out)
@@ -267,7 +265,7 @@ class ParallelSubVasp(ListRWTools, SSHTools):
                 true_E.append(False)
                 system_echo(' *WARNING* SinglePointEnergy is failed!')
             else:
-                if ave_E < 1e2:
+                if E_low < ave_E < E_up:
                     true_E.append(True)
                 else:
                     true_E.append(False)
@@ -380,14 +378,14 @@ class VaspOpt(SSHTools, DeleteDuplicates):
         shell_script = f'''
                         touch RUNNING
                         if [ {vasp_flag} -eq 1 ]; then
-                            for i in 1 2 3
+                            for i in {{1..{Num_Opt_Low_per_Job}}}
                             do
                                 cp INCAR_$i INCAR
                                 cp KPOINTS_$i KPOINTS
                                 echo >> INCAR
                                 echo ISYM={isym} >> INCAR
                                 date > vasp-$i.vasp
-                                {VASP_opt} >> vasp-$i.vasp
+                                {VASP_opt_low} >> vasp-$i.vasp
                                 date >> vasp-$i.vasp
                                 cp CONTCAR POSCAR
                                 cp CONTCAR POSCAR_$i
@@ -397,14 +395,14 @@ class VaspOpt(SSHTools, DeleteDuplicates):
                                 warning=`cat vasp-$i.vasp | grep WARNING | wc -l`
                                 error=`cat vasp-$i.vasp | grep Error | wc -l`
                                 if [ $warning -ge 10 -o $error -ge 10 ]; then
-                                    cp vasp-$i.vasp vasp-3.vasp
+                                    cp vasp-$i.vasp vasp-{Num_Opt_Low_per_Job}.vasp
                                     break
                                 fi
                             done
+                            cp vasp-{Num_Opt_Low_per_Job}.vasp vasp.vasp
                         else
-                            {VASP_scf} >> vasp-3.vasp
+                            {VASP_scf} >> vasp.vasp
                         fi
-                        cp vasp-3.vasp vasp.vasp
                         rm RUNNING
                         touch FINISH
                         '''
@@ -420,31 +418,31 @@ class VaspOpt(SSHTools, DeleteDuplicates):
         shell_script = f'''
                         touch RUNNING
                         if [ {vasp_flag} -eq 1 ]; then
-                            for i in 4 5
+                            for i in {{{Num_Opt_Low_per_Job+1}..{Num_Opt_Low_per_Job+Num_Opt_High_per_Job}}}
                             do
                                 cp INCAR_$i INCAR
                                 cp KPOINTS_$i KPOINTS
                                 echo >> INCAR
                                 echo ISYM={isym} >> INCAR
                                 date > vasp-$i.vasp
-                                {VASP_opt} >> vasp-$i.vasp
+                                {VASP_opt_high} >> vasp-$i.vasp
                                 date >> vasp-$i.vasp
                                 cp CONTCAR POSCAR
                                 cp CONTCAR POSCAR_$i
                                 cp OUTCAR OUTCAR_$i
                                 rm WAVECAR CHGCAR
                             done
+                            cp vasp-{Num_Opt_Low_per_Job+Num_Opt_High_per_Job}.vasp vasp.vasp
                         else
-                            {VASP_scf} >> vasp-5.vasp
+                            {VASP_scf} >> vasp.vasp
                         fi
-                        cp vasp-5.vasp vasp.vasp
                         rm RUNNING
                         touch FINISH
                         '''
         with open(f'{SCCOP_Path}/vasp/vasp_opt.sh', 'w') as obj:
             obj.write(shell_script)
     
-    def sub_optimization(self, job, limit=1, wait_time=5, finish_ratio=.5):
+    def sub_optimization(self, job, limit=5, wait_time=5, finish_ratio=.5):
         """
         SSH to target node and call vasp for optimization
         
@@ -456,7 +454,7 @@ class VaspOpt(SSHTools, DeleteDuplicates):
         finish_ratio [float, 0d]: ratio of finished jobs
         """
         vasp_flag = 1 if Use_VASP_Opt else 0
-        node = job[0].split('-')[-1]
+        node = self.extract_node_name(job[0])
         poscar_str = ' '.join(job)
         finish_num = max(1, int(finish_ratio*len(job)))
         job_num = f'`ls calc-* | grep RUNNING | wc -l`'
@@ -510,7 +508,7 @@ class VaspOpt(SSHTools, DeleteDuplicates):
                             if [ $time -ge {Opt_Time_Limit} ]; then
                                 finish=`ls * | grep FINISH | wc -l`
                                 if [ $finish -ge {finish_num} ]; then
-                                    ps -ef | grep \"{VASP_opt}\" | grep -v grep | awk '{{print $2}}' | xargs kill -9
+                                    ps -ef | grep \"mpirun -np\" | grep -v grep | awk '{{print $2}}' | xargs kill -9
                                     break
                                 fi
                             fi
@@ -539,7 +537,7 @@ class VaspOpt(SSHTools, DeleteDuplicates):
                             if [ $time -ge {Opt_Time_Limit} ]; then
                                 finish=`ls * | grep FINISH | wc -l`
                                 if [ $finish -ge {finish_num} ]; then
-                                    ps -ef | grep \"{VASP_opt}\" | grep -v grep | awk '{{print $2}}' | xargs kill -9
+                                    ps -ef | grep \"mpirun -np\" | grep -v grep | awk '{{print $2}}' | xargs kill -9
                                     break
                                 fi
                             fi
@@ -627,6 +625,10 @@ class VaspOpt(SSHTools, DeleteDuplicates):
         poscars [str, 1d]: right poscars
         energys [float, 1d]: right energys
         """
+        if len(E_Range) > 0:
+            E_low, E_up = E_Range
+        else:
+            E_low, E_up = [-100, 100]
         store = []
         vasp_out = os.listdir(f'{path}')
         vasp_out_order = sorted(vasp_out)
@@ -648,7 +650,7 @@ class VaspOpt(SSHTools, DeleteDuplicates):
         #get right structures
         poscars, energys = [], []
         for poscar, energy in store:
-            if energy < 1e2:
+            if E_low < energy < E_up:
                 poscars.append(poscar)
                 energys.append(energy)
         return poscars, energys
@@ -678,7 +680,7 @@ class VaspOpt(SSHTools, DeleteDuplicates):
         ----------
         job [str, 1d]: name of poscars in same node
         """
-        node = job[0].split('-')[-1]
+        node = self.extract_node_name(job[0])
         poscar_str = ' '.join(job)
         shell_script = f'''
                         #!/bin/bash --login

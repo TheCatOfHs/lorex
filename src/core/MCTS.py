@@ -116,16 +116,13 @@ class ParallelSampling(ParallelPESUpdate):
         """
         #generate sampling jobs
         job_num = len(index)
-        assign_cores = self.assign_cores(job_num, core_limit)
         sampling_jobs = []
         for i in range(job_num):
             option = f'--flag 0 --node {node} --recyc {recyc} --index {index[i]} --grid {grids[i]} '
             sampling_jobs.append([f'src/core/MCTS.py {option}'])
         sampling_jobs.append([' '])
         job_file = f'sampling_jobs_{node}.dat'
-        core_file = f'sampling_cores_{node}.dat'
         self.write_list2d(f'{self.local_grid_path}/{job_file}', sampling_jobs)
-        self.write_list2d(f'{self.local_grid_path}/{core_file}', np.transpose([assign_cores]))
         #monitor MCTS process
         monitor_script = f'''
                           repeat=0
@@ -172,11 +169,10 @@ class ParallelSampling(ParallelPESUpdate):
                        sub_counter=0
                        cat {job_file} | while read line
                        do
-                           flag=`echo $line | awk '{{print $NF}}'`
-                           cores=`echo $line | awk '{{print $1}}'`
-                           params=`echo $line | awk '{{$1=""; print $0}}'`
+                           flag=`echo $line | grep -o '[0-9]\+' | tail -n 1`
+                           params=`echo $line`
                            if [ $sub_counter -le {job_limit} ]; then
-                               taskset -c $cores python $params >> log&
+                               python $params >> log&
                                touch {Grid_Path}/RUNNING_$flag
                                ((sub_counter++))
                                echo $sub_counter >> data/grid/counter_log
@@ -198,7 +194,7 @@ class ParallelSampling(ParallelPESUpdate):
                                        done
                                    fi
                                fi
-                               taskset -c $cores python $params >> log&
+                               python $params >> log&
                                touch {Grid_Path}/RUNNING_$flag
                                ((sub_counter++))
                                echo $sub_counter >> data/grid/counter_log
@@ -218,20 +214,14 @@ class ParallelSampling(ParallelPESUpdate):
                         mkdir data/grid/json
                         scp {Host_Node}:{self.local_grid_path}/space_group_sampling.json data/grid/.
                         scp {Host_Node}:{self.local_grid_path}/{job_file} .
-                        scp {Host_Node}:{self.local_grid_path}/{core_file} .
                         
                         for i in `seq 1 {repeat_time}`
                         do
-                            paste -d ' ' {core_file} {job_file} | head -n $(wc -l < {job_file}) > {job_file}
                             {mcts_script}
                             {monitor_script}
-                            if [ -f tmp_sampling_jobs.dat ]; then
-                                mv tmp_sampling_jobs.dat {job_file}
-                            else
-                                break
-                            fi
+                            mv tmp_sampling_jobs.dat {job_file}
                         done
-                        rm log {core_file} {job_file}
+                        rm log {job_file}
                         python src/core/MCTS.py --flag 3 --node {node}
                         
                         cd data/grid
@@ -472,7 +462,7 @@ class RandomSampling(ActionSpace, AssignPlan, GNNSlice):
                         grid_idx, grid_dis = self.import_data('grid', grid, sg)
                         last_sg = sg
                     if General_Search or Cluster_Search:
-                        ratio = 1 + 0.5*np.random.random()
+                        ratio = 1 + 0.2*np.random.random()
                     elif Template_Search:
                         ratio = 1
                     args = (grid, ratio, sg, assign, symm_site, grid_idx, grid_dis, job)
