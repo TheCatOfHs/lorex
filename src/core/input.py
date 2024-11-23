@@ -1,7 +1,7 @@
 #Base
 Dimension = int('3')
-Composition = 'Na1H9V6O20'
-Num_Atom = [int('36'), int('36')]
+Composition = 'C1'
+Num_Atom = [int('5'), int('10')]
 Space_Group = [[1, 230]]
 
 #2-Dimension settings
@@ -31,7 +31,7 @@ Sampling_Time_Limit = 1200
 Rand_Latt_Ratio = 0.8
 #SpaceGroup-based
 General_Search = True
-Latt_per_Node = 100
+Latt_per_Node = 20
 SG_per_Latt = 20
 #Cluster-based
 Cluster_Search = False
@@ -64,8 +64,8 @@ Num_Opt_High_per_Node = 2
 Num_Opt_Low_per_Job = 3
 Num_Opt_High_per_Job = 2
 Refine_Stru = False
-Scf_Time_Limit = 6000
-Opt_Time_Limit = 6000
+Scf_Time_Limit = 600
+Opt_Time_Limit = 600
 #VASP
 Use_VASP_Scf = True
 Use_VASP_Opt = True

@@ -33,7 +33,6 @@ Package requirements:
 
 Hardware requirements:
 
-- [GPU node](https://en.wikipedia.org/wiki/GPU_cluster)
 - [CPU node](https://en.wikipedia.org/wiki/Server_(computing))
 
 ## Usage
@@ -48,10 +47,10 @@ ssh-copy-id -i ~/.ssh/id_rsa.pub user@nodeXXX
 
 ```diff
 [Server]
-# PBS or SLURM
+#PBS or SLURM
 Job_System = 'PBS'
 Job_Queue = 'CPU'
-# Obtain node information automatically
+#Obtain node information automatically
 Host_Node = 'HOST_NODE'
 CPU_Nodes = 'CPU_NODES'
 GPU_Nodes = 'GPU_NODES'
@@ -64,10 +63,10 @@ Modules = ''
 Envs = ''
 
 [Absolute path]
-# VASP settings
+#VASP settings
 VASP_scf = '/opt/intel/impi/4.0.3.008/intel64/bin/mpirun -np 4 vasp'
 VASP_opt = '/opt/intel/impi/4.0.3.008/intel64/bin/mpirun -np 48 vasp'
-# LAMMPS settings
+#LAMMPS settings
 LAMMPS_scf = 'lmp_intel_cpu_intelmpi -in input.inp'
 LAMMPS_opt = 'mpirun -np 96 lmp_intel_cpu_intelmpi -in input.inp'
 ```
