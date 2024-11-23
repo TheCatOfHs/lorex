@@ -252,9 +252,9 @@ rm data/nodes.dat
 If you install packages in [prerequisites](#prerequisites), and finish the [server and path configuration](#server-and-absolute-path-configuration) and [initial search file](#define-a-customized-search-file), then you can `cd /path/SCCOP-LX` to submit SCCOP-LX job by:
 
 ```bash
-# PBS job system
+#PBS job system
 qsub jobs.pbs
-# SLURM job system
+#SLURM job system
 sbatch job.slurm
 ```
 
