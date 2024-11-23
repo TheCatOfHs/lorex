@@ -20,18 +20,6 @@ The following paper describes the details of the SCCOP-LX framework:
 - [Authors](#authors)
 - [License](#license)
 
-## How to cite
-
-Please cite the following works if you want to use SCCOP-LX.
-
-```
-@article{SCCOP-LX,
-    title = {Minimizing the training dataset for efficient crystal structure prediction by graph neural network},
-    author = {Li, Chuan-Nan and Liang, Han-Pu and Xu, Si-Yuan and Zhang, Xie and Wei, Su-Huai and Lin, Zijing},
-    journal = {submitted to Nat. Comput. Sci.}
-}
-```
-
 ##  Prerequisites
 
 Package requirements:
